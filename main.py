@@ -3,6 +3,7 @@ import logging
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.enums import ChatMemberStatus
+from aiogram.filters import CommandStart
 from aiogram.types import Message
 
 from config import BOT_TOKEN, CHANNEL_ID
@@ -26,8 +27,16 @@ async def start_handler(message: Message, bot: Bot):
     }:
         await message.answer("Подписка есть ✅")
     else:
-        await message.answer("Похоже, вы не подписаны на канал.\n"
-                             "Сначала подпишитесь, а потом снова нажмите /start")
+        await message.answer(
+            "Похоже, вы не подписаны на канал.\n"
+            "Сначала подпишитесь, а потом снова нажмите /start"
+        )
+
+
+async def fallback_handler(message: Message):
+    # На всякий случай ловим всё остальное
+    logging.info(f"Unhandled message: {message.text!r}")
+    await message.answer("Я тебя вижу 🙂 Напиши /start, чтобы проверить подписку.")
 
 
 async def main():
@@ -39,7 +48,11 @@ async def main():
     bot = Bot(BOT_TOKEN)
     dp = Dispatcher()
 
-    dp.message.register(start_handler, F.text == "/start")
+    # Хэндлер именно на команду /start
+    dp.message.register(start_handler, CommandStart())
+
+    # Запасной хэндлер — на любой текст
+    dp.message.register(fallback_handler, F.text)
 
     await dp.start_polling(bot)
 

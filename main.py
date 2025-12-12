@@ -27,7 +27,7 @@ async def start_handler(message: Message, bot: Bot):
     if member.status in {
         ChatMemberStatus.MEMBER,
         ChatMemberStatus.ADMINISTRATOR,
-        ChatMemberStatus.OWNER,
+        ChatMemberStatus.CREATOR,  # <-- ВОТ ЭТО ВАЖНО
     }:
         await message.answer("Подписка есть ✅")
     else:
@@ -55,15 +55,8 @@ async def main():
     dp.message.register(fallback_handler, F.text)
 
     await bot.delete_webhook(drop_pending_updates=True)
-
     await dp.start_polling(bot)
 
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
-
-

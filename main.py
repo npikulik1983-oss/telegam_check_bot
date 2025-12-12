@@ -1,62 +1,77 @@
 import asyncio
 import logging
 import os
-import socket
-import time
 
-from aiogram import Bot, Dispatcher, F
-from aiogram.enums import ChatMemberStatus
+from aiohttp import web
+from aiogram import Bot, Dispatcher, Router
 from aiogram.filters import CommandStart
 from aiogram.types import Message
+from aiogram.enums import ChatMemberStatus
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
-from config import BOT_TOKEN, CHANNEL_ID
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
+BASE_URL = os.getenv("BASE_URL")  # https://xxx.onrender.com
+WEBHOOK_PATH = "/webhook"
+WEBHOOK_URL = f"{BASE_URL}{WEBHOOK_PATH}"
 
 logging.basicConfig(level=logging.INFO)
 
-INSTANCE = f"host={socket.gethostname()} pid={os.getpid()} t={int(time.time())}"
+router = Router()
 
 
+@router.message(CommandStart())
 async def start_handler(message: Message, bot: Bot):
     try:
         member = await bot.get_chat_member(CHANNEL_ID, message.from_user.id)
     except Exception:
-        logging.exception(f"[{INSTANCE}] Ошибка при get_chat_member")
-        await message.answer("Что-то пошло не так 😵 Попробуйте позже.")
+        await message.answer("Ошибка проверки подписки 😢")
         return
 
     if member.status in {
         ChatMemberStatus.MEMBER,
         ChatMemberStatus.ADMINISTRATOR,
-        ChatMemberStatus.CREATOR,  # <-- ВОТ ЭТО ВАЖНО
+        ChatMemberStatus.CREATOR,
     }:
         await message.answer("Подписка есть ✅")
     else:
-        await message.answer(
-            "Похоже, вы не подписаны на канал.\n"
-            "Сначала подпишитесь, а потом снова нажмите /start"
-        )
+        await message.answer("Подпишись на канал и нажми /start ещё раз 🙂")
 
 
-async def fallback_handler(message: Message):
-    logging.info(f"[{INSTANCE}] Unhandled message: {message.text!r}")
-    await message.answer("Я тебя вижу 🙂 Напиши /start, чтобы проверить подписку.")
+async def on_startup(bot: Bot):
+    await bot.set_webhook(WEBHOOK_URL)
+    logging.info(f"Webhook установлен: {WEBHOOK_URL}")
 
 
-async def main():
-    if not BOT_TOKEN:
-        raise RuntimeError("BOT_TOKEN не задан")
+async def on_shutdown(bot: Bot):
+    await bot.delete_webhook()
 
-    logging.info(f"[{INSTANCE}] Стартуем бота, CHANNEL_ID = {CHANNEL_ID}")
 
+def main():
     bot = Bot(BOT_TOKEN)
     dp = Dispatcher()
+    dp.include_router(router)
 
-    dp.message.register(start_handler, CommandStart())
-    dp.message.register(fallback_handler, F.text)
+    app = web.Application()
+    app.on_startup.append(lambda _: on_startup(bot))
+    app.on_shutdown.append(lambda _: on_shutdown(bot))
 
-    await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot)
+    SimpleRequestHandler(
+        dispatcher=dp,
+        bot=bot,
+    ).register(app, path=WEBHOOK_PATH)
+
+    setup_application(app, dp, bot=bot)
+
+    port = int(os.getenv("PORT", 10000))
+    web.run_app(app, host="0.0.0.0", port=port)
+
+
+if __name__ == "__main__":
+    main()
+
 
 
 if __name__ == "__main__":
     asyncio.run(main())
+

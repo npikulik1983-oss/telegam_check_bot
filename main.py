@@ -12,12 +12,11 @@ logging.basicConfig(level=logging.INFO)
 
 
 async def start_handler(message: Message, bot: Bot):
-    # Проверяем подписку на канал
     try:
         member = await bot.get_chat_member(CHANNEL_ID, message.from_user.id)
-    except Exception as e:
+    except Exception:
         logging.exception("Ошибка при get_chat_member")
-        await message.answer("Что-то пошло не так, попробуйте позже.")
+        await message.answer("Что-то пошло не так 😵 Попробуйте позже.")
         return
 
     if member.status in {
@@ -34,7 +33,6 @@ async def start_handler(message: Message, bot: Bot):
 
 
 async def fallback_handler(message: Message):
-    # На всякий случай ловим всё остальное
     logging.info(f"Unhandled message: {message.text!r}")
     await message.answer("Я тебя вижу 🙂 Напиши /start, чтобы проверить подписку.")
 
@@ -48,14 +46,18 @@ async def main():
     bot = Bot(BOT_TOKEN)
     dp = Dispatcher()
 
-    # Хэндлер именно на команду /start
+    # Хэндлер на /start
     dp.message.register(start_handler, CommandStart())
 
-    # Запасной хэндлер — на любой текст
+    # Запасной хэндлер на любой текст
     dp.message.register(fallback_handler, F.text)
+
+    # ВАЖНО: если где-то был webhook, он будет мешать polling и вызывать конфликт
+    await bot.delete_webhook(drop_pending_updates=True)
 
     await dp.start_polling(bot)
 
 
 if __name__ == "__main__":
     asyncio.run(main())
+
